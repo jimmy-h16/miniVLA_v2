@@ -1,0 +1,6 @@
+checkpoints/
+*.pt
+*.hdf5
+__pycache__/
+*.pyc
+.DS_Store

@@ -1,0 +1,53 @@
+name: miniVLA
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+
+dependencies:
+  # Python version
+  - python=3.10
+
+  # PyTorch — MPS-compatible for M2 Mac
+  - pip
+
+  - pip:
+    # Core deep learning
+    - torch==2.3.0
+    - torchvision==0.18.0
+    - torchaudio==2.3.0
+
+    # Data & utilities
+    - numpy==1.26.4
+    - scipy
+    - einops          # Tensor reshaping (very useful for VLA code)
+    - tqdm            # Progress bars
+    - h5py            # For loading LIBERO dataset (if using h5 format)
+
+    # Experiment tracking
+    - wandb
+    - tensorboard
+
+    # Config management
+    - omegaconf       # YAML config loading
+    - hydra-core      # Config management (optional but recommended)
+
+    # Simulation (LIBERO)
+    # - libero
+    - robosuite==1.4.0
+    - gymnasium
+
+    - bddl
+    - easydict
+    - matplotlib
+    - gym
+
+    # Code quality
+    - black           # Auto formatter
+    - pytest          # Unit testing
+
+    # Others
+    - transformers
+    - pyyaml
+    - termcolor
+    - mujoco = 2.3.7

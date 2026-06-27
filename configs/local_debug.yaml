@@ -1,0 +1,18 @@
+# Mini-VLA v2 — local debug config
+model:
+  dim_model: 256
+  vocab_size: 49408       # CLIP BPE
+  state_dim: 8
+  chunk_size: 16
+  action_dim: 7
+  nhead: 4
+  fusion_layers: 2
+  decoder_layers: 2
+
+train:
+  epochs: 2
+  batch_size: 4
+  lr: 4e-4
+  max_episodes: 5
+  chunk_size: 16
+  device: mps
