@@ -17,7 +17,7 @@ N_TRAIN_EP   = 45               # explicit episode counts (no ratio needed)
 N_VAL_EP     = 5
 TOTAL_EP     = N_TRAIN_EP + N_VAL_EP   # = 50
 
-EPOCHS        = 100
+EPOCHS        = 10
 BATCH_SIZE    = 16
 LR            = 1e-4
 CHUNK_SIZE    = 16

@@ -11,6 +11,7 @@ class StateEncoder(nn.Module):
     def __init__(self, state_dim: int = 8, embed_dim: int = 256):
         super().__init__()
         self.mlp = nn.Sequential(
+            nn.LayerNorm(state_dim),
             nn.Linear(state_dim, embed_dim),
             nn.ReLU(),
             nn.Linear(embed_dim, embed_dim),
