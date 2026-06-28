@@ -27,6 +27,7 @@ CAMERA_H     = 256
 CAMERA_W     = 256
 DEVICE       = "mps"
 CHECKPOINT   = "checkpoints/mini_vla_v2_final_val0.05081.pt"
+ACTION_HORIZON = 16
 
 # ---------------------------------------------------------------------------
 # Tokenizer  (keep in sync with LiberoDataset._tokenize)
@@ -117,7 +118,7 @@ for TASK_IDX in TASK_INDICES:
             for step in range(MAX_STEPS):
                 frames.append(obs["agentview_image"].copy())
 
-                if step_in_chunk >= CHUNK_SIZE:
+                if step_in_chunk >= ACTION_HORIZON:
                     # --- agentview ---
                     img = obs["agentview_image"]
                     img = torch.from_numpy(img.copy()).permute(2, 0, 1).float() / 255.0
