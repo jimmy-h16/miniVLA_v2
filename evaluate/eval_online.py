@@ -5,12 +5,11 @@ import torch
 import numpy as np
 import cv2
 import robosuite.utils.transform_utils as T
-
 from transformers import CLIPTokenizer
 
 # os.environ["LIBERO_PATH"] = "/Users/jimmy/Documents/UST/MiniVLA/MiniVLA_v2/LIBERO/libero"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from data.libero_dataset import ActionNormalizer
+
 from libero.libero import benchmark, get_libero_path
 from libero.libero.envs import OffScreenRenderEnv
 from models.mini_vla import MiniVLA
@@ -29,16 +28,16 @@ torch.load = _patched_load
 # ---------------------------------------------------------------------------
 TASK_SUITE   = "libero_spatial"
 TASK_INDICES = list(range(1))
-NUM_EPISODES = 10
+NUM_EPISODES = 50
 MAX_STEPS    = 300
 CHUNK_SIZE   = 16
 SEQ_LEN      = 77       # CLIP max length
 CAMERA_H     = 256
 CAMERA_W     = 256
 DEVICE       = "mps"
-CHECKPOINT   = "checkpoints/mini_vla_v2_best.pt"
+CHECKPOINT   = "checkpoints/mini_vla_v2_task0.pt"
 ACTION_HORIZON = 16
-GENERATE_VIDEO = True
+GENERATE_VIDEO = False
 
 # ---------------------------------------------------------------------------
 # Tokenizer  (keep in sync with LiberoDataset._tokenize)
@@ -79,7 +78,6 @@ def _tokenize(text: str):
 model = MiniVLA().to(DEVICE)
 model.load_state_dict(torch.load(CHECKPOINT, map_location=DEVICE))
 model.eval()
-normalizer = ActionNormalizer.load("checkpoints/action_normalizer.pt")
 print(f"[Eval] Loaded checkpoint: {CHECKPOINT}")
 
 # ---------------------------------------------------------------------------
@@ -146,10 +144,9 @@ for TASK_IDX in TASK_INDICES:
                     state   = np.concatenate([eef_pos, eef_ori, gripper])
                     state   = torch.from_numpy(state).float().unsqueeze(0).to(DEVICE)
 
-
+                    # TODO: model signature updated — wrist is now 2nd arg
                     output_action = model(img, wrist, tokens, textMask, state)
-                    pred_action = normalizer.denormalize(output_action)
-                    action_chunk  = pred_action.squeeze(0).cpu().numpy()
+                    action_chunk  = output_action.squeeze(0).cpu().numpy()
                     step_in_chunk = 0
 
                 obs, reward, done, info = env.step(action_chunk[step_in_chunk].tolist())
