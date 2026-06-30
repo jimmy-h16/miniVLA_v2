@@ -7,6 +7,47 @@ import h5py
 import json
 from transformers import CLIPTokenizer
 
+class ActionNormalizer:
+    """
+    Online mean/std normalizer for action chunks.
+    Call fit() once on the training dataset, then use
+    normalize() in the train loop and denormalize() at inference.
+    """
+
+    def __init__(self, eps: float = 1e-6):
+        self.eps  = eps
+        self.mean = None
+        self.std  = None
+
+    def fit(self, dataset) -> "ActionNormalizer":
+        all_actions = []
+        for sample in dataset:
+            actions = sample["actions"]           # [chunk_size, 7]
+            mask    = sample["action_mask"].bool() # [chunk_size]
+            all_actions.append(actions[mask])      # only real (non-padded) steps
+        all_actions = torch.cat(all_actions, dim=0)               # [N, 7]
+        self.mean   = all_actions.mean(dim=0)                     # [7]
+        self.std    = all_actions.std(dim=0).clamp(min=self.eps)  # [7]
+        print(f"[ActionNormalizer] fit on {all_actions.shape[0]:,} steps")
+        return self
+
+    def normalize(self, actions: torch.Tensor) -> torch.Tensor:
+        return (actions - self.mean.to(actions.device)) / self.std.to(actions.device)
+
+    def denormalize(self, actions: torch.Tensor) -> torch.Tensor:
+        return actions * self.std.to(actions.device) + self.mean.to(actions.device)
+
+    def save(self, path: str):
+        torch.save({"mean": self.mean, "std": self.std}, path)
+
+    @classmethod
+    def load(cls, path: str) -> "ActionNormalizer":
+        ckpt = torch.load(path, map_location="cpu")
+        n = cls()
+        n.mean, n.std = ckpt["mean"], ckpt["std"]
+        return n
+    
+
 class LiberoDataset(Dataset):
     """
     Loads LIBERO demonstration episodes for Mini-VLA v2 training.

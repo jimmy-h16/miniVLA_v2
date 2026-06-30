@@ -4,7 +4,7 @@ import torch
 import numpy as np, random, torch
 from torch.utils.data import DataLoader, ConcatDataset
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
-from data.libero_dataset import LiberoDataset
+from data.libero_dataset import LiberoDataset, ActionNormalizer
 from models.mini_vla import MiniVLA
 
 
@@ -16,8 +16,8 @@ np.random.seed(42); random.seed(42); torch.manual_seed(42)
 DATASET_DIR  = os.environ.get("LIBERO_DATASET_DIR", os.path.expanduser("~/.robosuite/datasets"))
 TASK_INDICES = list(range(1))   # which HDF5 files to use (None → all)
 
-N_TRAIN_EP   = 50               # explicit episode counts (no ratio needed)
-N_VAL_EP     = 0
+N_TRAIN_EP   = 47               # explicit episode counts (no ratio needed)
+N_VAL_EP     = 3
 TOTAL_EP     = N_TRAIN_EP + N_VAL_EP   # = 50
 
 EPOCHS        = 40
@@ -68,7 +68,7 @@ def build_split_datasets(hdf5_files: list[str],
     return ConcatDataset(train_datasets), ConcatDataset(val_datasets)
 
 
-def run_epoch(model, loader, device, loss_fn, optimizer=None):
+def run_epoch(model, loader, device, loss_fn, normalizer, optimizer=None):
     """
     One forward pass over `loader`.
     If optimizer is provided → training mode (gradients + update).
@@ -80,7 +80,8 @@ def run_epoch(model, loader, device, loss_fn, optimizer=None):
     model.train() if is_train else model.eval()
     total_loss  = 0.0
     num_batches = 0
-
+ 
+    
     ctx = torch.enable_grad() if is_train else torch.no_grad()
     with ctx:
         for batch in loader:
@@ -92,18 +93,19 @@ def run_epoch(model, loader, device, loss_fn, optimizer=None):
             actionMask = batch["action_mask"].to(device)    # [B, 16]
             textMask   = batch["text_mask"].to(device)      # [B, seq_len]
 
+            action_norm = normalizer.normalize(action) 
             pred = model(img, wrist, token, textMask, state)   # [B, 16, 7]
 
             if is_train:
                 optimizer.zero_grad()
 
-            loss = loss_fn(pred, action)                         # [B, 16, 7]
+            loss = loss_fn(pred, action_norm)                         # [B, 16, 7]
             loss = loss * actionMask.unsqueeze(-1)               # zero out padded steps
             loss = loss.sum() / actionMask.sum().clamp(min=1) / action.shape[-1]
 
             if is_train:
                 loss.backward()
-                # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
 
             total_loss  += loss.item()
@@ -142,6 +144,10 @@ def main():
     print(f"\n[Dataset] Samples after chunking:")
     print(f"  Train : {len(train_dataset):,} samples")
     print(f"  Val   : {len(val_dataset):,} samples")
+    
+    normalizer = ActionNormalizer()
+    normalizer.fit(train_dataset)
+    normalizer.save("checkpoints/action_normalizer.pt")
 
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True,  num_workers=0)
     val_loader   = DataLoader(val_dataset,   batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
@@ -156,12 +162,12 @@ def main():
     print(f"  Device               : {DEVICE}")
 
     # ---- Scheduler: warmup → cosine ---------------------------------
-    # warmup_sched = LinearLR(optim, start_factor=0.1, end_factor=1.0, total_iters=WARMUP_EPOCHS)
-    # cosine_sched = CosineAnnealingLR(optim, T_max=EPOCHS - WARMUP_EPOCHS, eta_min=1e-6)
-    # scheduler    = SequentialLR(optim, schedulers=[warmup_sched, cosine_sched],
-    #                             milestones=[WARMUP_EPOCHS])
+    warmup_sched = LinearLR(optim, start_factor=0.1, end_factor=1.0, total_iters=WARMUP_EPOCHS)
+    cosine_sched = CosineAnnealingLR(optim, T_max=EPOCHS - WARMUP_EPOCHS, eta_min=1e-6)
+    scheduler    = SequentialLR(optim, schedulers=[warmup_sched, cosine_sched],
+                                milestones=[WARMUP_EPOCHS])
 
-    # print(f"\n[Scheduler] Linear warmup ({WARMUP_EPOCHS} ep) → Cosine annealing ({EPOCHS - WARMUP_EPOCHS} ep)")
+    print(f"\n[Scheduler] Linear warmup ({WARMUP_EPOCHS} ep) → Cosine annealing ({EPOCHS - WARMUP_EPOCHS} ep)")
 
     # ---- Training loop ---------------------------------------------
     os.makedirs("checkpoints", exist_ok=True)
@@ -177,8 +183,8 @@ def main():
     print(sep)
 
     for epoch in range(EPOCHS):
-        train_loss = run_epoch(model, train_loader, DEVICE, loss_fn, optimizer=optim)
-        val_loss   = run_epoch(model, val_loader,   DEVICE, loss_fn, optimizer=None)
+        train_loss = run_epoch(model, train_loader, DEVICE, loss_fn, normalizer, optimizer=optim)
+        val_loss   = run_epoch(model, val_loader,   DEVICE, loss_fn, normalizer, optimizer=None)
 
         scheduler.step()
         current_lr = scheduler.get_last_lr()[0]
