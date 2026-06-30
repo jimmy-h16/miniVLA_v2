@@ -26,11 +26,16 @@ class LiberoDataset(Dataset):
         seq_len:        int  = 77,      # CLIP max sequence length
         num_episodes:   int  = None,
         skip_episodes:  int  = 0,
+        normalizer = None,  
+        task_id_map     = None,
     ):
         self.chunk_size = chunk_size
         self.image_size = image_size
         self.seq_len    = seq_len
         self.hdf5_path  = dataset_path
+        self.normalizer = normalizer 
+        self.task_id_map  = task_id_map
+        self.task_name    = os.path.basename(dataset_path)
 
         # --- Load episode keys ---
         with h5py.File(dataset_path, "r") as f:
@@ -73,24 +78,24 @@ class LiberoDataset(Dataset):
         Swap it out when you add the transformers dependency.
         """
 
-        # tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
-        # enc = tokenizer(
-        #     text,
-        #     max_length=self.seq_len,       
-        #     padding="max_length",
-        #     truncation=True,
-        #     # return_tensors="pt",
-        # )
-        # tokens    = torch.tensor(enc["input_ids"],      dtype=torch.long)
-        # text_mask = torch.tensor(enc["attention_mask"], dtype=torch.float32)  
+        tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
+        enc = tokenizer(
+            text,
+            max_length=self.seq_len,       
+            padding="max_length",
+            truncation=True,
+            # return_tensors="pt",
+        )
+        tokens    = torch.tensor(enc["input_ids"],      dtype=torch.long)
+        text_mask = torch.tensor(enc["attention_mask"], dtype=torch.float32)  
         
         # --- PLACEHOLDER: char-level fallback (remove after CLIP integration) ---
-        vocab_size = 49408
-        text  = text[:self.seq_len]
-        ids   = [ord(c) % vocab_size for c in text]
-        pad   = self.seq_len - len(ids)
-        tokens    = torch.tensor(ids + [0] * pad, dtype=torch.long)
-        text_mask = torch.tensor([1] * len(ids) + [0] * pad, dtype=torch.float32)
+        # vocab_size = 49408
+        # text  = text[:self.seq_len]
+        # ids   = [ord(c) % vocab_size for c in text]
+        # pad   = self.seq_len - len(ids)
+        # tokens    = torch.tensor(ids + [0] * pad, dtype=torch.long)
+        # text_mask = torch.tensor([1] * len(ids) + [0] * pad, dtype=torch.float32)
         return tokens, text_mask
 
     def __len__(self):
@@ -121,11 +126,32 @@ class LiberoDataset(Dataset):
             state   = torch.from_numpy(state).float()
 
             # --- Action chunk [chunk_size, 7] with validity mask ---
-            end          = min(t + self.chunk_size, T)
-            actions_real = ep["actions"][t:end]
-            actual_len   = end - t
-            pad_len      = self.chunk_size - actual_len
+            # end          = min(t + self.chunk_size, T)
+            # actions_real = ep["actions"][t:end]
+            # actual_len   = end - t
+            # pad_len      = self.chunk_size - actual_len
 
+            # if pad_len > 0:
+            #     actions_padded = np.concatenate(
+            #         [actions_real, np.zeros((pad_len, 7))], axis=0
+            #     )
+            # else:
+            #     actions_padded = actions_real
+
+            # actions     = torch.from_numpy(actions_padded).float()          # [16, 7]
+            # action_mask = torch.tensor(
+            #     [1.0] * actual_len + [0.0] * pad_len
+            # )                                                                # [16]
+            # --- Action chunk ---
+            end          = min(t + self.chunk_size, T)
+            actions_real = ep["actions"][t:end]          # [actual_len, 7]  raw
+
+            # Normalise BEFORE padding so pad zeros don't corrupt stats
+            if self.normalizer is not None:
+                actions_real = self.normalizer.normalise(actions_real)   # still numpy
+
+            actual_len = end - t
+            pad_len    = self.chunk_size - actual_len
             if pad_len > 0:
                 actions_padded = np.concatenate(
                     [actions_real, np.zeros((pad_len, 7))], axis=0
@@ -133,12 +159,15 @@ class LiberoDataset(Dataset):
             else:
                 actions_padded = actions_real
 
-            actions     = torch.from_numpy(actions_padded).float()          # [16, 7]
-            action_mask = torch.tensor(
-                [1.0] * actual_len + [0.0] * pad_len
-            )                                                                # [16]
-
+            actions     = torch.from_numpy(actions_padded).float()   # [16, 7]
+            action_mask = torch.tensor([1.0]*actual_len + [0.0]*pad_len)
+            task_id = None
+            if self.task_id_map is not None:
+                task_id = self.task_id_map[self.task_name]
+            
         return {
+            "task_name": os.path.basename(self.hdf5_path),
+            "task_id":   task_id,  
             "image":       img,              # [3, H, W]  agentview
             "wrist_image": wrist,            # [3, H, W]  eye_in_hand  (NEW)
             "tokens":      self.tokens,      # [seq_len]

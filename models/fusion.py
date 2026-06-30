@@ -82,26 +82,7 @@ class TransformerFusion(nn.Module):
         state_feat: torch.Tensor,   # [B, dim_model]
         txt_feat:   torch.Tensor,   # [B, dim_model]
     ):
-        # TODO: Step 1 - stack into token sequence
-        # tokens = torch.stack([img_feat, wrist_feat, state_feat, txt_feat], dim=1)
-        #          shape: [B, 4, dim_model]
-
-        # TODO: Step 2 - add modality identity embeddings
-        # tokens = tokens + self.modality_embedding
-
-        # TODO: Step 3 - cross-modal self-attention
-        # memory_tokens = self.encoder(tokens)   # [B, 4, dim_model]
-
-        # TODO: Step 4 - mean-pool to get a single context vector
-        # fused = memory_tokens.mean(dim=1)      # [B, dim_model]
-
-        # TODO: Step 5 - output projection
-        # fused_feat = self.out_proj(fused)      # [B, dim_model]
-
-        # TODO: return both (decoder needs memory_tokens, trainer may use fused_feat)
-        # return memory_tokens, fused_feat
-        # raise NotImplementedError("TransformerFusion.forward() - implement me!")
-        
+                
         tokens = torch.stack([img_feat,wrist_feat,state_feat,txt_feat], dim = 1)
         tokens = tokens + self.modality_embedding
         memory = self.encoder(tokens)

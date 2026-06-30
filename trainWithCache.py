@@ -1,5 +1,8 @@
+# train4.py  — miniVLA v2 with precomputed CLIP text features
 import os
 import glob
+import json
+import h5py
 import torch
 from torch.utils.data import DataLoader, ConcatDataset
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
@@ -11,67 +14,85 @@ from models.mini_vla import MiniVLA
 # Config
 # ============================================================
 DATASET_DIR  = os.environ.get("LIBERO_DATASET_DIR", os.path.expanduser("~/.robosuite/datasets"))
-TASK_INDICES = list(range(1))   # which HDF5 files to use (None → all)
+TASK_INDICES = list(range(3))             # None → all tasks, list(range(1)) → first task only
 
-N_TRAIN_EP   = 45               # explicit episode counts (no ratio needed)
+N_TRAIN_EP   = 45
 N_VAL_EP     = 5
-TOTAL_EP     = N_TRAIN_EP + N_VAL_EP   # = 50
+TOTAL_EP     = N_TRAIN_EP + N_VAL_EP
 
-EPOCHS        = 40
+EPOCHS        = 50              # increased from 10
 BATCH_SIZE    = 16
 LR            = 1e-4
 CHUNK_SIZE    = 16
 WARMUP_EPOCHS = 5
-PERIOD        = 4
 
-DEVICE = "mps"    # change to "cuda" or "cpu" as needed
+DEVICE = "mps"                  # change to "cuda" or "cpu" as needed
 
 
 # ============================================================
 # Dataset helpers
 # ============================================================
-def build_split_datasets(hdf5_files: list[str],
-                         chunk_size: int,
-                         n_train: int,
-                         n_val: int) -> tuple:
-    """
-    Load each HDF5 file twice — once for the first `n_train` episodes
-    and once for the last `n_val` episodes — so the split is exact and
-    deterministic regardless of episode length.
-
-    Returns (train_dataset, val_dataset).
-    """
+def build_split_datasets(hdf5_files, chunk_size, n_train, n_val):
     train_datasets, val_datasets = [], []
-
     for p in hdf5_files:
-        # Training episodes: 0 … n_train-1
-        train_ds = LiberoDataset(
-            dataset_path=p,
-            chunk_size=chunk_size,
-            num_episodes=n_train,
-            skip_episodes=0,
-        )
-        train_datasets.append(train_ds)
-
-        # Validation episodes: n_train … n_train+n_val-1
-        val_ds = LiberoDataset(
-            dataset_path=p,
-            chunk_size=chunk_size,
-            num_episodes=n_val,
-            skip_episodes=n_train,
-        )
-        val_datasets.append(val_ds)
-
+        train_datasets.append(LiberoDataset(
+            dataset_path=p, chunk_size=chunk_size,
+            num_episodes=n_train, skip_episodes=0,
+        ))
+        val_datasets.append(LiberoDataset(
+            dataset_path=p, chunk_size=chunk_size,
+            num_episodes=n_val, skip_episodes=n_train,
+        ))
     return ConcatDataset(train_datasets), ConcatDataset(val_datasets)
 
 
-def run_epoch(model, loader, device, loss_fn, optimizer=None):
-    """
-    One forward pass over `loader`.
-    If optimizer is provided → training mode (gradients + update).
-    Otherwise             → eval mode (no gradients).
+def get_task_instruction(hdf5_path: str) -> str:
+    """Read language instruction from HDF5 file — same logic as LiberoDataset.__init__."""
+    with h5py.File(hdf5_path, "r") as f:
+        problem_info = json.loads(f["data"].attrs["problem_info"])
+        return "".join(problem_info["language_instruction"])
 
-    Returns average loss over all batches.
+
+def precompute_text_features(model, hdf5_files, device) -> dict:
+    """
+    Run CLIP text encoder once per task and cache the result.
+    Instructions never change during training, so this eliminates
+    the CLIP forward pass cost from every batch.
+
+    Returns:
+        task_text_feats: dict mapping task filename → [1, 256] tensor
+    """
+    print(f"\n[Precompute] Computing CLIP text features for {len(hdf5_files)} task(s)...")
+    task_text_feats = {}
+
+    model.eval()
+    with torch.no_grad():
+        for p in hdf5_files:
+            task_name   = os.path.basename(p)
+            instruction = get_task_instruction(p)
+
+            # Reuse LiberoDataset's tokenizer logic
+            tmp_ds = LiberoDataset(dataset_path=p, chunk_size=1, num_episodes=1)
+            tokens    = tmp_ds.tokens.unsqueeze(0).to(device)      # [1, seq_len]
+            text_mask = tmp_ds.text_mask.unsqueeze(0).to(device)   # [1, seq_len]
+
+            task_text_feats[task_name] = model.text_encoder(tokens, text_mask)  # [1, 256]
+            print(f"  ✓ {task_name}  |  instruction: \"{instruction[:60]}...\"")
+
+    model.train()
+    return task_text_feats
+
+
+# ============================================================
+# Epoch runner
+# ============================================================
+def run_epoch(model, loader, device, loss_fn, task_text_feats, optimizer=None):
+    """
+    One forward pass over loader.
+    Uses precomputed text features — CLIP is never called inside this loop.
+
+    If optimizer is provided → training mode.
+    Otherwise               → eval mode.
     """
     is_train = optimizer is not None
     model.train() if is_train else model.eval()
@@ -85,17 +106,23 @@ def run_epoch(model, loader, device, loss_fn, optimizer=None):
             wrist      = batch["wrist_image"].to(device)    # [B, 3, H, W]
             state      = batch["state"].to(device)          # [B, 8]
             action     = batch["actions"].to(device)        # [B, 16, 7]
-            token      = batch["tokens"].to(device)         # [B, seq_len]
             actionMask = batch["action_mask"].to(device)    # [B, 16]
-            textMask   = batch["text_mask"].to(device)      # [B, seq_len]
+            task_names = batch["task_name"]                 # list of str, length B
 
-            pred = model(img, wrist, token, textMask, state)   # [B, 16, 7]
+            # Look up precomputed text feature for each sample in the batch
+            # All samples in a batch may come from different tasks (multitask)
+            txt_feat = torch.cat(
+                [task_text_feats[name] for name in task_names], dim=0
+            ).to(device)                                    # [B, 256]
+
+            # Forward — pass txt_feat directly, skip token/mask
+            pred = model(img, wrist, None, None, state, txt_feat=txt_feat)  # [B, 16, 7]
 
             if is_train:
                 optimizer.zero_grad()
 
-            loss = loss_fn(pred, action)                         # [B, 16, 7]
-            loss = loss * actionMask.unsqueeze(-1)               # zero out padded steps
+            loss = loss_fn(pred, action)
+            loss = loss * actionMask.unsqueeze(-1)          # zero out padded steps
             loss = loss.sum() / actionMask.sum().clamp(min=1) / action.shape[-1]
 
             if is_train:
@@ -114,7 +141,7 @@ def run_epoch(model, loader, device, loss_fn, optimizer=None):
 # ============================================================
 def main():
     print("=" * 60)
-    print("  miniVLA v2 — Training Script (train3.py)")
+    print("  miniVLA v2 — Training Script (train4.py)")
     print("=" * 60)
 
     # ---- Discover HDF5 files ----------------------------------------
@@ -130,7 +157,7 @@ def main():
     # ---- Episode split ----------------------------------------------
     print(f"\n[Dataset] Episode split:")
     print(f"  Train episodes : {N_TRAIN_EP} (ep 0 – {N_TRAIN_EP - 1})")
-    print(f"  Val   episodes : {N_VAL_EP}  (ep {N_TRAIN_EP} – {TOTAL_EP - 1})")
+    print(f"  Val   episodes : {N_VAL_EP}   (ep {N_TRAIN_EP} – {TOTAL_EP - 1})")
 
     train_dataset, val_dataset = build_split_datasets(
         hdf5_files, CHUNK_SIZE, N_TRAIN_EP, N_VAL_EP
@@ -144,13 +171,17 @@ def main():
     val_loader   = DataLoader(val_dataset,   batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
 
     # ---- Model & optimiser -----------------------------------------
-    model    = MiniVLA().to(DEVICE)
-    optim    = torch.optim.AdamW(model.parameters(), lr=LR)
-    loss_fn  = torch.nn.MSELoss(reduction="none")
+    model   = MiniVLA().to(DEVICE)
+    optim   = torch.optim.AdamW(model.parameters(), lr=LR)
+    loss_fn = torch.nn.MSELoss(reduction="none")
 
     print(f"\n[Model] MiniVLA v2")
     print(f"  Trainable parameters : {model.count_parameters():,}")
     print(f"  Device               : {DEVICE}")
+
+    # ---- Precompute text features -----------------------------------
+    # CLIP runs once per task here — never again inside the training loop
+    task_text_feats = precompute_text_features(model, hdf5_files, DEVICE)
 
     # ---- Scheduler: warmup → cosine ---------------------------------
     warmup_sched = LinearLR(optim, start_factor=0.1, end_factor=1.0, total_iters=WARMUP_EPOCHS)
@@ -162,7 +193,7 @@ def main():
 
     # ---- Training loop ---------------------------------------------
     os.makedirs("checkpoints", exist_ok=True)
-    best_val_loss = float("inf")
+    best_val_loss  = float("inf")
     best_ckpt_path = None
 
     header = f"{'Epoch':>7}  {'Train Loss':>11}  {'Val Loss':>10}  {'LR':>10}  {'Best?':>6}"
@@ -174,8 +205,10 @@ def main():
     print(sep)
 
     for epoch in range(EPOCHS):
-        train_loss = run_epoch(model, train_loader, DEVICE, loss_fn, optimizer=optim)
-        val_loss   = run_epoch(model, val_loader,   DEVICE, loss_fn, optimizer=None)
+        train_loss = run_epoch(model, train_loader, DEVICE, loss_fn,
+                               task_text_feats, optimizer=optim)
+        val_loss   = run_epoch(model, val_loader,   DEVICE, loss_fn,
+                               task_text_feats, optimizer=None)
 
         scheduler.step()
         current_lr = scheduler.get_last_lr()[0]
@@ -191,8 +224,7 @@ def main():
             torch.save(model.state_dict(), best_ckpt_path)
             print(f"          → Saved best checkpoint: {best_ckpt_path}")
 
-        # Periodic checkpoint every 10 epochs
-        if (epoch + 1) % PERIOD == 0:
+        if (epoch + 1) % 10 == 0:
             periodic = f"checkpoints/mini_vla_v2_ep{epoch+1:04d}.pt"
             torch.save(model.state_dict(), periodic)
             print(f"          → Periodic checkpoint : {periodic}")
@@ -200,12 +232,12 @@ def main():
     # ---- Final summary ---------------------------------------------
     print(sep)
     print(f"\n[Done] Training complete.")
-    print(f"  Best val loss      : {best_val_loss:.5f}")
-    print(f"  Best checkpoint    : {best_ckpt_path}")
+    print(f"  Best val loss   : {best_val_loss:.5f}")
+    print(f"  Best checkpoint : {best_ckpt_path}")
 
     final_ckpt = f"checkpoints/mini_vla_v2_final_val{best_val_loss:.5f}.pt"
     torch.save(model.state_dict(), final_ckpt)
-    print(f"  Final checkpoint   : {final_ckpt}")
+    print(f"  Final checkpoint: {final_ckpt}")
     print("=" * 60)
 
 

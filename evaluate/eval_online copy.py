@@ -15,19 +15,10 @@ from libero.libero.envs import OffScreenRenderEnv
 from models.mini_vla import MiniVLA
 
 # ---------------------------------------------------------------------------
-# Pytorch Patch
-# ---------------------------------------------------------------------------
-_original_load = torch.load
-def _patched_load(*args, **kwargs):
-    kwargs.setdefault("weights_only", False)
-    return _original_load(*args, **kwargs)
-torch.load = _patched_load
-
-# ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 TASK_SUITE   = "libero_spatial"
-TASK_INDICES = list(range(1))
+TASK_INDICES = list(range(3))
 NUM_EPISODES = 5
 MAX_STEPS    = 300
 CHUNK_SIZE   = 16
@@ -37,6 +28,15 @@ CAMERA_W     = 256
 DEVICE       = "mps"
 CHECKPOINT   = "checkpoints/mini_vla_v2_best.pt"
 ACTION_HORIZON = 16
+
+# ---------------------------------------------------------------------------
+# Unpack Patch
+# ---------------------------------------------------------------------------
+_original_load = torch.load
+def _patched_load(*args, **kwargs):
+    kwargs.setdefault("weights_only", False)
+    return _original_load(*args, **kwargs)
+torch.load = _patched_load
 
 # ---------------------------------------------------------------------------
 # Tokenizer  (keep in sync with LiberoDataset._tokenize)
@@ -51,24 +51,17 @@ def _tokenize(text: str):
                         truncation=True, return_tensors="pt")
         return enc["input_ids"].squeeze(0), enc["attention_mask"].float().squeeze(0)
     """
-    # tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
-    # enc = tokenizer(
-    #     text,
-    #     max_length=SEQ_LEN,       # 77
-    #     padding="max_length",
-    #     truncation=True,
-    #     # return_tensors="pt",
-    # )
-    # tokens    = torch.tensor(enc["input_ids"],      dtype=torch.long)
-    # text_mask = torch.tensor(enc["attention_mask"], dtype=torch.float32)
+    tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
+    enc = tokenizer(
+        text,
+        max_length=SEQ_LEN,       # 77
+        padding="max_length",
+        truncation=True,
+        # return_tensors="pt",
+    )
+    tokens    = torch.tensor(enc["input_ids"],      dtype=torch.long)
+    text_mask = torch.tensor(enc["attention_mask"], dtype=torch.float32)
 
-    
-    vocab_size = 49408
-    text      = text[:SEQ_LEN]
-    ids       = [ord(c) % vocab_size for c in text]
-    pad       = SEQ_LEN - len(ids)
-    tokens    = torch.tensor(ids + [0] * pad, dtype=torch.long)
-    text_mask = torch.tensor([1] * len(ids) + [0] * pad, dtype=torch.float32)
     return tokens, text_mask
 
 # ---------------------------------------------------------------------------
