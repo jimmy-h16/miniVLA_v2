@@ -1,6 +1,7 @@
 import os
 import glob
 import torch
+import numpy as np, random, torch
 from torch.utils.data import DataLoader, ConcatDataset
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 from data.libero_dataset import LiberoDataset
@@ -10,11 +11,13 @@ from models.mini_vla import MiniVLA
 # ============================================================
 # Config
 # ============================================================
+np.random.seed(42); random.seed(42); torch.manual_seed(42)
+
 DATASET_DIR  = os.environ.get("LIBERO_DATASET_DIR", os.path.expanduser("~/.robosuite/datasets"))
 TASK_INDICES = list(range(1))   # which HDF5 files to use (None → all)
 
-N_TRAIN_EP   = 45               # explicit episode counts (no ratio needed)
-N_VAL_EP     = 5
+N_TRAIN_EP   = 50               # explicit episode counts (no ratio needed)
+N_VAL_EP     = 0
 TOTAL_EP     = N_TRAIN_EP + N_VAL_EP   # = 50
 
 EPOCHS        = 40
@@ -100,7 +103,7 @@ def run_epoch(model, loader, device, loss_fn, optimizer=None):
 
             if is_train:
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
 
             total_loss  += loss.item()
@@ -153,12 +156,12 @@ def main():
     print(f"  Device               : {DEVICE}")
 
     # ---- Scheduler: warmup → cosine ---------------------------------
-    warmup_sched = LinearLR(optim, start_factor=0.1, end_factor=1.0, total_iters=WARMUP_EPOCHS)
-    cosine_sched = CosineAnnealingLR(optim, T_max=EPOCHS - WARMUP_EPOCHS, eta_min=1e-6)
-    scheduler    = SequentialLR(optim, schedulers=[warmup_sched, cosine_sched],
-                                milestones=[WARMUP_EPOCHS])
+    # warmup_sched = LinearLR(optim, start_factor=0.1, end_factor=1.0, total_iters=WARMUP_EPOCHS)
+    # cosine_sched = CosineAnnealingLR(optim, T_max=EPOCHS - WARMUP_EPOCHS, eta_min=1e-6)
+    # scheduler    = SequentialLR(optim, schedulers=[warmup_sched, cosine_sched],
+    #                             milestones=[WARMUP_EPOCHS])
 
-    print(f"\n[Scheduler] Linear warmup ({WARMUP_EPOCHS} ep) → Cosine annealing ({EPOCHS - WARMUP_EPOCHS} ep)")
+    # print(f"\n[Scheduler] Linear warmup ({WARMUP_EPOCHS} ep) → Cosine annealing ({EPOCHS - WARMUP_EPOCHS} ep)")
 
     # ---- Training loop ---------------------------------------------
     os.makedirs("checkpoints", exist_ok=True)

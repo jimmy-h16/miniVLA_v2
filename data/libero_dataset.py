@@ -73,24 +73,24 @@ class LiberoDataset(Dataset):
         Swap it out when you add the transformers dependency.
         """
 
-        # tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
-        # enc = tokenizer(
-        #     text,
-        #     max_length=self.seq_len,       
-        #     padding="max_length",
-        #     truncation=True,
-        #     # return_tensors="pt",
-        # )
-        # tokens    = torch.tensor(enc["input_ids"],      dtype=torch.long)
-        # text_mask = torch.tensor(enc["attention_mask"], dtype=torch.float32)  
+        tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
+        enc = tokenizer(
+            text,
+            max_length=self.seq_len,       
+            padding="max_length",
+            truncation=True,
+            # return_tensors="pt",
+        )
+        tokens    = torch.tensor(enc["input_ids"],      dtype=torch.long)
+        text_mask = torch.tensor(enc["attention_mask"], dtype=torch.float32)  
         
         # --- PLACEHOLDER: char-level fallback (remove after CLIP integration) ---
-        vocab_size = 49408
-        text  = text[:self.seq_len]
-        ids   = [ord(c) % vocab_size for c in text]
-        pad   = self.seq_len - len(ids)
-        tokens    = torch.tensor(ids + [0] * pad, dtype=torch.long)
-        text_mask = torch.tensor([1] * len(ids) + [0] * pad, dtype=torch.float32)
+        # vocab_size = 49408
+        # text  = text[:self.seq_len]
+        # ids   = [ord(c) % vocab_size for c in text]
+        # pad   = self.seq_len - len(ids)
+        # tokens    = torch.tensor(ids + [0] * pad, dtype=torch.long)
+        # text_mask = torch.tensor([1] * len(ids) + [0] * pad, dtype=torch.float32)
         return tokens, text_mask
 
     def __len__(self):

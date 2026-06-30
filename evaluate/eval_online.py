@@ -28,15 +28,16 @@ torch.load = _patched_load
 # ---------------------------------------------------------------------------
 TASK_SUITE   = "libero_spatial"
 TASK_INDICES = list(range(1))
-NUM_EPISODES = 5
+NUM_EPISODES = 50
 MAX_STEPS    = 300
 CHUNK_SIZE   = 16
 SEQ_LEN      = 77       # CLIP max length
 CAMERA_H     = 256
 CAMERA_W     = 256
 DEVICE       = "mps"
-CHECKPOINT   = "checkpoints/mini_vla_v2_best.pt"
+CHECKPOINT   = "checkpoints/mini_vla_v2_task0.pt"
 ACTION_HORIZON = 16
+GENERATE_VIDEO = False
 
 # ---------------------------------------------------------------------------
 # Tokenizer  (keep in sync with LiberoDataset._tokenize)
@@ -51,24 +52,24 @@ def _tokenize(text: str):
                         truncation=True, return_tensors="pt")
         return enc["input_ids"].squeeze(0), enc["attention_mask"].float().squeeze(0)
     """
-    # tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
-    # enc = tokenizer(
-    #     text,
-    #     max_length=SEQ_LEN,       # 77
-    #     padding="max_length",
-    #     truncation=True,
-    #     # return_tensors="pt",
-    # )
-    # tokens    = torch.tensor(enc["input_ids"],      dtype=torch.long)
-    # text_mask = torch.tensor(enc["attention_mask"], dtype=torch.float32)
+    tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
+    enc = tokenizer(
+        text,
+        max_length=SEQ_LEN,       # 77
+        padding="max_length",
+        truncation=True,
+        # return_tensors="pt",
+    )
+    tokens    = torch.tensor(enc["input_ids"],      dtype=torch.long)
+    text_mask = torch.tensor(enc["attention_mask"], dtype=torch.float32)
 
     
-    vocab_size = 49408
-    text      = text[:SEQ_LEN]
-    ids       = [ord(c) % vocab_size for c in text]
-    pad       = SEQ_LEN - len(ids)
-    tokens    = torch.tensor(ids + [0] * pad, dtype=torch.long)
-    text_mask = torch.tensor([1] * len(ids) + [0] * pad, dtype=torch.float32)
+    # vocab_size = 49408
+    # text      = text[:SEQ_LEN]
+    # ids       = [ord(c) % vocab_size for c in text]
+    # pad       = SEQ_LEN - len(ids)
+    # tokens    = torch.tensor(ids + [0] * pad, dtype=torch.long)
+    # text_mask = torch.tensor([1] * len(ids) + [0] * pad, dtype=torch.float32)
     return tokens, text_mask
 
 # ---------------------------------------------------------------------------
@@ -159,12 +160,13 @@ for TASK_IDX in TASK_INDICES:
 
             successes.append(ep_success)
             status    = "SUCCESS" if ep_success else "FAIL"
-            video_path = f"videos/task{TASK_IDX:02d}_ep{ep_idx+1:03d}_{status}.mp4"
-            h, w      = frames[0].shape[:2]
-            writer    = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*"avc1"), 20, (w, h))
-            for frame in frames:
-                writer.write(cv2.cvtColor(cv2.flip(frame, 0), cv2.COLOR_RGB2BGR))
-            writer.release()
+            if GENERATE_VIDEO:
+                video_path = f"videos/task{TASK_IDX:02d}_ep{ep_idx+1:03d}_{status}.mp4"
+                h, w      = frames[0].shape[:2]
+                writer    = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*"avc1"), 20, (w, h))
+                for frame in frames:
+                    writer.write(cv2.cvtColor(cv2.flip(frame, 0), cv2.COLOR_RGB2BGR))
+                writer.release()
             print(f"  Episode {ep_idx+1:>3}/{NUM_EPISODES} | {status} | steps={step+1}")
 
     env.close()

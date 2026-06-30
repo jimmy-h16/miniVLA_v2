@@ -18,7 +18,7 @@ from models.mini_vla import MiniVLA
 # Config
 # ---------------------------------------------------------------------------
 TASK_SUITE   = "libero_spatial"
-TASK_INDICES = list(range(3))
+TASK_INDICES = list(range(1))
 NUM_EPISODES = 5
 MAX_STEPS    = 300
 CHUNK_SIZE   = 16
@@ -26,7 +26,7 @@ SEQ_LEN      = 77       # CLIP max length
 CAMERA_H     = 256
 CAMERA_W     = 256
 DEVICE       = "mps"
-CHECKPOINT   = "checkpoints/mini_vla_v2_best.pt"
+CHECKPOINT   = "checkpoints/mini_vla_v2_ep0016.pt"
 ACTION_HORIZON = 16
 
 # ---------------------------------------------------------------------------

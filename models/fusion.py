@@ -34,28 +34,6 @@ class TransformerFusion(nn.Module):
         num_tokens: int = 4,
     ):
         super().__init__()
-
-        # TODO: define self.modality_embedding
-        # Learnable identity tag for each token so the transformer knows
-        # which modality each token belongs to.
-        # Shape: [1, num_tokens, dim_model]  (broadcast over batch)
-        # Hint: nn.Parameter(torch.randn(...))
-        # self.modality_embedding = ...
-
-        # TODO: define self.encoder
-        # A TransformerEncoder that lets 4 tokens attend to each other.
-        # Use nn.TransformerEncoderLayer + nn.TransformerEncoder.
-        # Remember: batch_first=True so input shape is [B, seq, dim].
-        # encoder_layer = nn.TransformerEncoderLayer(
-        #     d_model=dim_model, nhead=nhead,
-        #     dim_feedforward=dim_model * 4, dropout=0.1, batch_first=True
-        # )
-        # self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-
-        # TODO: define self.out_proj
-        # Applied after mean-pooling to re-mix and stabilise the fused feature.
-        # Use nn.Sequential with nn.Linear(dim_model, dim_model) + nn.LayerNorm(dim_model).
-        # self.out_proj = nn.Sequential(...)
         
         self.modality_embedding = nn.Parameter(torch.randn([1,num_tokens,dim_model]))
         
@@ -82,6 +60,7 @@ class TransformerFusion(nn.Module):
         state_feat: torch.Tensor,   # [B, dim_model]
         txt_feat:   torch.Tensor,   # [B, dim_model]
     ):
+        
                 
         tokens = torch.stack([img_feat,wrist_feat,state_feat,txt_feat], dim = 1)
         tokens = tokens + self.modality_embedding
