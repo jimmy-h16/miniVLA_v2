@@ -35,9 +35,9 @@ SEQ_LEN      = 77       # CLIP max length
 CAMERA_H     = 256
 CAMERA_W     = 256
 DEVICE       = "mps"
-CHECKPOINT   = "checkpoints/mini_vla_v2_task0.pt"
+CHECKPOINT   = "checkpoints/mini_vla_v2_best.pt"
 ACTION_HORIZON = 16
-GENERATE_VIDEO = False
+GENERATE_VIDEO = True
 
 # ---------------------------------------------------------------------------
 # Tokenizer  (keep in sync with LiberoDataset._tokenize)
