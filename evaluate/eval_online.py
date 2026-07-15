@@ -36,7 +36,7 @@ CAMERA_H     = 256
 CAMERA_W     = 256
 DEVICE       = "mps"
 CHECKPOINT   = "checkpoints/mini_vla_v2_best.pt"
-ACTION_HORIZON = 16
+ACTION_HORIZON = 12
 GENERATE_VIDEO = True
 
 # ---------------------------------------------------------------------------
@@ -117,7 +117,7 @@ for TASK_IDX in TASK_INDICES:
     with torch.no_grad():
         for ep_idx in range(NUM_EPISODES):
             obs = env.reset()
-            env.set_init_state(init_states[ep_idx % num_init_states])
+            obs = env.set_init_state(init_states[ep_idx % num_init_states])
 
             ep_success    = False
             step_in_chunk = CHUNK_SIZE

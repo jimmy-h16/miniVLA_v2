@@ -11,7 +11,6 @@ from models.mini_vla import MiniVLA
 # ============================================================
 # Config
 # ============================================================
-np.random.seed(42); random.seed(42); torch.manual_seed(42)
 
 DATASET_DIR  = os.environ.get("LIBERO_DATASET_DIR", os.path.expanduser("~/.robosuite/datasets"))
 TASK_INDICES = list(range(1))   # which HDF5 files to use (None → all)

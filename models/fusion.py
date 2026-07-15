@@ -61,7 +61,6 @@ class TransformerFusion(nn.Module):
         txt_feat:   torch.Tensor,   # [B, dim_model]
     ):
         
-                
         tokens = torch.stack([img_feat,wrist_feat,state_feat,txt_feat], dim = 1)
         tokens = tokens + self.modality_embedding
         memory = self.encoder(tokens)

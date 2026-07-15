@@ -20,17 +20,17 @@ class SmallImageEncoder(nn.Module):
             nn.BatchNorm2d(32),
             nn.ReLU(),
 
-            nn.Conv2d(32, 64, 3, stride=1, padding=1),  # [B, 64, H/4, W/4]
+            nn.Conv2d(32, 64, 3, stride=2, padding=1),  # [B, 64, H/4, W/4]
             nn.BatchNorm2d(64),
             nn.ReLU(),
 
-            nn.Conv2d(64, 128, 3, stride=1, padding=1), # [B, 128, H/8, W/8]
+            nn.Conv2d(64, 128, 3, stride=2, padding=1), # [B, 128, H/8, W/8]
             nn.BatchNorm2d(128),
             nn.ReLU(),
         )
-        self.gap  = nn.AdaptiveAvgPool2d(1)  # [B, 128, 1, 1]
-        self.flat = nn.Flatten()             # [B, 128]
-        self.proj = nn.Linear(128, embed_dim) # [B, embed_dim]
+        self.gap  = nn.AdaptiveAvgPool2d((4,4))  # [B, 128, 1, 1]
+        self.flat = nn.Flatten()             # [B, 128*4*4]
+        self.proj = nn.Linear(128*4*4, embed_dim) # [B, embed_dim]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.cnn(x)

@@ -22,7 +22,7 @@ class LiberoDataset(Dataset):
         self,
         dataset_path:   str,
         chunk_size:     int  = 16,
-        image_size:     int  = 256,
+        image_size:     int  = 128,
         seq_len:        int  = 77,      # CLIP max sequence length
         num_episodes:   int  = None,
         skip_episodes:  int  = 0,
