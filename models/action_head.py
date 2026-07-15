@@ -35,35 +35,15 @@ class ActionQueryDecoder(nn.Module):
         self.chunk_size = chunk_size
         self.action_dim = action_dim
 
-        # TODO: define self.query_embed
-        # 16 learnable queries, one per future timestep.
-        # Shape: [1, chunk_size, dim_model]  (broadcast over batch)
-        # Hint: nn.Parameter(torch.randn(...))
-        # self.query_embed = ...
-
-        # TODO: define self.decoder
-        # A TransformerDecoder where queries (tgt) cross-attend to memory_tokens.
-        # Use nn.TransformerDecoderLayer + nn.TransformerDecoder.
-        # Remember: batch_first=True.
-        # decoder_layer = nn.TransformerDecoderLayer(
-        #     d_model=dim_model, nhead=nhead,
-        #     dim_feedforward=dim_model * 4, dropout=0.1, batch_first=True
-        # )
-        # self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
-
-        # TODO: define self.action_out
-        # Projects each decoded query vector to one action.
-        # Hint: nn.Linear(dim_model, action_dim)
-        # self.action_out = ...
-        
+        # One learnable query represents each future action timestep.
         self.queryEmbed = nn.Parameter(torch.randn([1,chunk_size,dim_model]))
-        
+
+        # The queries attend to the fused observation tokens.
         decoderLayer = nn.TransformerDecoderLayer(d_model=dim_model,nhead=nhead,dim_feedforward=4*dim_model,dropout=0.1,batch_first=True)
         self.decoder = nn.TransformerDecoder(decoder_layer=decoderLayer,num_layers=num_layers)
-        
+
+        # Project each decoded query into the robot action space.
         self.actionProj = nn.Linear(dim_model,action_dim)
-        
-        pass
 
     def forward(self, memory_tokens: torch.Tensor) -> torch.Tensor:
         """
@@ -72,22 +52,6 @@ class ActionQueryDecoder(nn.Module):
         Returns:
             pred_action_chunk: [B, chunk_size, action_dim]
         """
-        # TODO: Step 1 - expand learnable queries over batch
-        # B = memory_tokens.shape[0]
-        # queries = self.query_embed.expand(B, -1, -1)   # [B, 16, dim_model]
-
-        # TODO: Step 2 - each query attends to observation memory
-        # decoded_queries = self.decoder(
-        #     tgt=queries,
-        #     memory=memory_tokens,
-        # )                                               # [B, 16, dim_model]
-
-        # TODO: Step 3 - project each query to action space
-        # pred_action_chunk = self.action_out(decoded_queries)  # [B, 16, action_dim]
-
-        # return pred_action_chunk
-        # raise NotImplementedError("ActionQueryDecoder.forward() - implement me!")
-        
         B = memory_tokens.shape[0]
         queries = self.queryEmbed.expand(B,-1,-1)
         decodedQueries = self.decoder(tgt=queries,memory=memory_tokens)

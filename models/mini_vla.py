@@ -76,26 +76,13 @@ class MiniVLA(nn.Module):
         mask:        torch.Tensor,  # [B, seq_len]  attention mask
         state:       torch.Tensor,  # [B, state_dim]
     ) -> torch.Tensor:
-        # TODO: implement forward
-        # Step 1 — encode each modality
-        # img_feat   = self.image_encoder(image)          # [B, D]
-        # wrist_feat = self.wrist_encoder(wrist_image)    # [B, D]
-        # state_feat = self.state_encoder(state)          # [B, D]
-        # txt_feat   = self.text_encoder(tokens, mask)    # [B, D]
-
-        # Step 2 — cross-modal fusion → memory tokens
-        # memory_tokens, _ = self.fusion(img_feat, wrist_feat, state_feat, txt_feat)
-        # memory_tokens shape: [B, 4, dim_model]
-
-        # Step 3 — action query decoder
-        # actions = self.action_head(memory_tokens)       # [B, chunk_size, action_dim]
-
-        # return actions
+        # Encode each input modality into the shared feature dimension.
         img_feat   = self.image_encoder(image)          # [B, D]
         wrist_feat = self.wrist_encoder(wrist_image)    # [B, D]
         state_feat = self.state_encoder(state)          # [B, D]
         txt_feat   = self.text_encoder(tokens, mask)    # [B, D]
         
+        # Fuse modality tokens, then decode the future action sequence.
         memory, _ = self.fusion(img_feat, wrist_feat, state_feat, txt_feat)
         actions = self.action_head(memory)
         

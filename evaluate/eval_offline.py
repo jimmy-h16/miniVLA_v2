@@ -61,7 +61,6 @@ with torch.no_grad():
         actionMask = batch["action_mask"].to(DEVICE)
         textMask   = batch["text_mask"].to(DEVICE)
 
-        # TODO: updated model signature
         pred  = model(img, wrist, token, textMask, state)
         loss  = lossFunc(pred, action)
         loss  = loss * actionMask.unsqueeze(-1)

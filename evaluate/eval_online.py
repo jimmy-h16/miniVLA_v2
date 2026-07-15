@@ -43,15 +43,7 @@ GENERATE_VIDEO = True
 # Tokenizer  (keep in sync with LiberoDataset._tokenize)
 # ---------------------------------------------------------------------------
 def _tokenize(text: str):
-    """
-    TODO: replace with CLIP tokenizer (same change as in libero_dataset.py).
-
-        from transformers import CLIPTokenizer
-        tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
-        enc = tokenizer(text, max_length=SEQ_LEN, padding="max_length",
-                        truncation=True, return_tensors="pt")
-        return enc["input_ids"].squeeze(0), enc["attention_mask"].float().squeeze(0)
-    """
+    """Tokenize an instruction exactly as the training dataset does."""
     tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
     enc = tokenizer(
         text,
@@ -133,7 +125,7 @@ for TASK_IDX in TASK_INDICES:
                     img = torch.from_numpy(img.copy()).permute(2, 0, 1).float() / 255.0
                     img = img.unsqueeze(0).to(DEVICE)
 
-                    # --- wrist (eye_in_hand)  TODO: confirm obs key name ---
+                    # --- wrist (eye-in-hand) camera ---
                     wrist = obs["robot0_eye_in_hand_image"]
                     wrist = torch.from_numpy(wrist.copy()).permute(2, 0, 1).float() / 255.0
                     wrist = wrist.unsqueeze(0).to(DEVICE)
@@ -144,7 +136,6 @@ for TASK_IDX in TASK_INDICES:
                     state   = np.concatenate([eef_pos, eef_ori, gripper])
                     state   = torch.from_numpy(state).float().unsqueeze(0).to(DEVICE)
 
-                    # TODO: model signature updated — wrist is now 2nd arg
                     output_action = model(img, wrist, tokens, textMask, state)
                     action_chunk  = output_action.squeeze(0).cpu().numpy()
                     step_in_chunk = 0

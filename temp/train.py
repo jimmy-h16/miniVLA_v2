@@ -58,7 +58,6 @@ for epoch in range(EPOCHS):
         actionMask  = batch["action_mask"].to(device)
         textMask    = batch["text_mask"].to(device)
 
-        # TODO: model now takes wrist_image as second argument
         outputAction = model(img, wrist, token, textMask, state)
         optim.zero_grad()
 

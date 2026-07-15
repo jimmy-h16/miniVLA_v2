@@ -48,11 +48,9 @@ def test_text_encoder():
 def test_transformer_fusion():
     fusion = TransformerFusion(dim_model=D, nhead=4, num_layers=2, num_tokens=4)
     feats  = [torch.randn(B, D) for _ in range(4)]
-    # TODO: update once you implement TransformerFusion.forward()
-    # memory_tokens, fused_feat = fusion(*feats)
-    # assert memory_tokens.shape == (B, 4, D)
-    # assert fused_feat.shape    == (B, D)
-    pytest.skip("TransformerFusion not yet implemented")
+    memory_tokens, fused_feat = fusion(*feats)
+    assert memory_tokens.shape == (B, 4, D)
+    assert fused_feat.shape    == (B, D)
 
 
 def test_action_query_decoder():
@@ -60,10 +58,8 @@ def test_action_query_decoder():
         dim_model=D, chunk_size=CHUNK_SIZE, action_dim=ACTION_DIM, nhead=4, num_layers=2
     )
     memory = torch.randn(B, 4, D)
-    # TODO: update once you implement ActionQueryDecoder.forward()
-    # actions = decoder(memory)
-    # assert actions.shape == (B, CHUNK_SIZE, ACTION_DIM)
-    pytest.skip("ActionQueryDecoder not yet implemented")
+    actions = decoder(memory)
+    assert actions.shape == (B, CHUNK_SIZE, ACTION_DIM)
 
 
 def test_mini_vla_shape():
@@ -73,7 +69,5 @@ def test_mini_vla_shape():
     tokens = torch.randint(0, 49408, (B, SEQ_LEN))
     mask   = torch.ones(B, SEQ_LEN)
     state  = torch.randn(B, STATE_DIM)
-    # TODO: update once you implement MiniVLA.forward()
-    # out = model(image, wrist, tokens, mask, state)
-    # assert out.shape == (B, CHUNK_SIZE, ACTION_DIM)
-    pytest.skip("MiniVLA.forward() not yet implemented")
+    out = model(image, wrist, tokens, mask, state)
+    assert out.shape == (B, CHUNK_SIZE, ACTION_DIM)

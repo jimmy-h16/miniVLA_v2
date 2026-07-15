@@ -56,23 +56,7 @@ class LiberoDataset(Dataset):
         self.tokens, self.text_mask = self._tokenize(self.task_instruction)
 
     def _tokenize(self, text: str):
-        """
-        TODO: replace with CLIP tokenizer.
-
-        v1 used a simple char-level tokenizer (vocab=1000).
-        v2 should use CLIPTokenizer from HuggingFace:
-
-            from transformers import CLIPTokenizer
-            tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
-            enc = tokenizer(text, max_length=self.seq_len, padding="max_length",
-                            truncation=True, return_tensors="pt")
-            tokens    = enc["input_ids"].squeeze(0)       # [seq_len]  long
-            text_mask = enc["attention_mask"].squeeze(0)  # [seq_len]  float
-
-        For now a placeholder is kept so the rest of the pipeline runs.
-        Swap it out when you add the transformers dependency.
-        """
-
+        """Tokenize an instruction to CLIP's fixed context length."""
         tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
         enc = tokenizer(
             text,
@@ -84,13 +68,6 @@ class LiberoDataset(Dataset):
         tokens    = torch.tensor(enc["input_ids"],      dtype=torch.long)
         text_mask = torch.tensor(enc["attention_mask"], dtype=torch.float32)  
         
-        # --- PLACEHOLDER: char-level fallback (remove after CLIP integration) ---
-        # vocab_size = 49408
-        # text  = text[:self.seq_len]
-        # ids   = [ord(c) % vocab_size for c in text]
-        # pad   = self.seq_len - len(ids)
-        # tokens    = torch.tensor(ids + [0] * pad, dtype=torch.long)
-        # text_mask = torch.tensor([1] * len(ids) + [0] * pad, dtype=torch.float32)
         return tokens, text_mask
 
     def __len__(self):
@@ -107,9 +84,7 @@ class LiberoDataset(Dataset):
             img = ep["obs"]["agentview_rgb"][t]                              # [H, W, 3] uint8
             img = torch.from_numpy(img).permute(2, 0, 1).float() / 255.0   # [3, H, W]
 
-            # --- eye-in-hand (wrist) image [3, H, W]  (NEW in v2) ---
-            # TODO: confirm the key name in your HDF5 file.
-            # Common keys: "eye_in_hand_rgb", "robot0_eye_in_hand_image"
+            # --- eye-in-hand (wrist) image [3, H, W] ---
             wrist = ep["obs"]["eye_in_hand_rgb"][t]                                  # [H, W, 3]
             wrist = torch.from_numpy(wrist).permute(2, 0, 1).float() / 255.0        # [3, H, W]
 
