@@ -39,6 +39,26 @@ The policy head uses a Transformer decoder with learnable action queries. Self-a
 ### CLIP Tokenizer
 Language instructions are tokenized with the CLIP tokenizer, which provides richer and more accurate text representations than a simple character-level tokenizer.
 
+## Lessons Learned
+
+1. **Token Transformer Fusion**  
+   Self-attention allows image, language, and robot-state features to interact and provide shared context.
+
+2. **Action Query Decoder**  
+   Action queries use self-attention across future steps and cross-attention to the fused observation memory.
+
+3. **CLIP Tokenizer**  
+   CLIP tokenization provides better word and subword representations than character-level tokenization.
+
+4. **Different Embeddings**  
+   Feature, modality, and action-query embeddings represent input content, input sources, and future action steps.
+
+5. **Shorter Action Horizon**  
+   Executing fewer actions before replanning improves robustness and precision during tasks such as object placement.
+
+6. **Preserving Spatial Information**  
+   Replacing global `1×1` pooling with a spatial feature grid retains object-location information needed for manipulation.
+
 ## Setup
 
 ```bash
@@ -52,3 +72,4 @@ pip install transformers  # for CLIP tokenizer
 ```bash
 python train.py
 ```
+
